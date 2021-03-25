@@ -3,7 +3,8 @@ const express = require('express');
 const app = express();
 const mongoose = require('mongoose');
 mongoose.connect('mongodb://localhost:27017/usersDB', {useNewUrlParser: true, useUnifiedTopology: true});
-const encrypt = require('mongoose-encryption');
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 app.set('view engine','ejs');
 app.use(express.urlencoded({extended:true}));
 app.use(express.static("public"));
@@ -13,7 +14,7 @@ const usersSchema = new mongoose.Schema({
     password: String 
 });
 
-usersSchema.plugin(encrypt, { secret: process.env.SECRET , encryptedFields:['password']});
+
 
 const User = mongoose.model('User',usersSchema);
 
@@ -30,23 +31,27 @@ app.get('/register',(req,res)=>{
 });
 
 app.post('/register',(req,res)=>{
-    const email = req.body.username;
-    const pass = req.body.password;
-    const newUser = new User({
-        email: email,
-        password: pass
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+        const email = req.body.username;
+        const pass = hash;
+        const newUser = new User({
+            email: email,
+            password: pass
+        });
+        newUser.save((err)=>{
+            if(err){
+                console.log(err);
+            } else {
+                res.render('secrets');
+            }
+        });
     });
-    newUser.save((err)=>{
-        if(err){
-            console.log(err);
-        } else {
-            res.render('secrets');
-        }
-    });
+    
 
 })
 
 app.post('/login',(req,res)=>{
+    
     const username = req.body.username;
     const pass = req.body.password;
     User.findOne({email:username},(err,foundUser)=>{
@@ -54,9 +59,11 @@ app.post('/login',(req,res)=>{
             console.log(err);
         } else{
             if(foundUser){
-                if(foundUser.password === pass){
-                    res.render('secrets');
-                }
+                bcrypt.compare(pass, foundUser.password, function(err, result) {
+                    if (result === true){
+                        res.render('secrets');
+                    }
+                });
             }
         }
     })
